@@ -684,7 +684,7 @@ def student_dashboard(request):
     # there is no verification messaging to display.
     verify_status_by_course = check_verify_status_by_course(user, course_enrollments)
     cert_statuses = {
-        enrollment.course_id: cert_info(request.user, enrollment.course_overview)
+        enrollment.course_id: cert_info(request.user, enrollment.course_overview, request)
         for enrollment in course_enrollments
     }
 

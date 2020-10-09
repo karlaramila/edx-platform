@@ -33,7 +33,6 @@ from lms.djangoapps.verify_student.services import IDVerificationService
 from lms.djangoapps.verify_student.utils import is_verification_expiring_soon, verification_for_datetime
 from openedx.core.djangoapps.certificates.api import certificates_viewable_for_course
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
-from openedx.core.djangoapps.theming import helpers as theming_helpers
 from openedx.core.djangoapps.theming.helpers import get_themes
 from openedx.core.djangoapps.user_authn.utils import is_safe_login_or_logout_redirect
 from student.models import (
@@ -437,7 +436,7 @@ class AccountValidationError(Exception):
         self.field = field
 
 
-def cert_info(user, course_overview):
+def cert_info(user, course_overview, request):
     """
     Get the certificate info needed to render the dashboard section for the given
     student and course.
@@ -445,31 +444,44 @@ def cert_info(user, course_overview):
     Arguments:
         user (User): A user.
         course_overview (CourseOverview): A course.
+        request (Request): A request. Used to construct an absolute uri for links.
 
     Returns:
-        dict: A dictionary with keys:
-            'status': one of 'generating', 'downloadable', 'notpassing', 'processing', 'restricted', 'unavailable', or
-                'certificate_earned_but_not_available'
-            'download_url': url, only present if show_download_url is True
-            'show_survey_button': bool
-            'survey_url': url, only if show_survey_button is True
-            'grade': if status is not 'processing'
-            'can_unenroll': if status allows for unenrollment
+        See _cert_info
     """
     return _cert_info(
         user,
         course_overview,
-        certificate_status_for_student(user, course_overview.id)
+        certificate_status_for_student(user, course_overview.id),
+        request,
     )
 
 
-def _cert_info(user, course_overview, cert_status):
+def _cert_info(user, course_overview, cert_status, request):
     """
     Implements the logic for cert_info -- split out for testing.
 
     Arguments:
         user (User): A user.
         course_overview (CourseOverview): A course.
+        cert_status (dict): dictionary containing information about certificate status for the user
+        request (Request): A request. Used to construct an absolute uri for links.
+
+    Returns:
+        dictionary containing:
+            'status': one of 'generating', 'downloadable', 'notpassing', 'restricted', 'auditing',
+                'processing', 'unverified', 'unavailable', or 'certificate_earned_but_not_available'
+            'show_survey_button': bool
+            'can_unenroll': if status allows for unenrollment
+
+        The dictionary may also contain:
+            'linked_in_url': url to add cert to LinkedIn profile
+            'survey_url': url, only if course_overview.end_of_course_survey_url is not None
+            'show_cert_web_view': bool if html web certs are enabled and there is an active web cert
+            'cert_web_view_url': url if html web certs are enabled and there is an active web cert
+            'download_url': url to download a cert
+            'grade': if status is in 'generating', 'downloadable', 'notpassing', 'restricted',
+                'auditing', or 'unverified'
     """
     # simplify the status for the template using this lookup table
     template_state = {
@@ -496,7 +508,7 @@ def _cert_info(user, course_overview, cert_status):
         return default_info
 
     status = template_state.get(cert_status['status'], default_status)
-    is_hidden_status = status in ('unavailable', 'processing', 'generating', 'notpassing', 'auditing')
+    is_hidden_status = status in ('processing', 'generating', 'notpassing', 'auditing')
 
     if (
         not certificates_viewable_for_course(course_overview) and
@@ -521,47 +533,40 @@ def _cert_info(user, course_overview, cert_status):
     if status != default_status and course_overview.end_of_course_survey_url is not None:
         status_dict.update({
             'show_survey_button': True,
-            'survey_url': process_survey_link(course_overview.end_of_course_survey_url, user)})
+            'survey_url': process_survey_link(course_overview.end_of_course_survey_url, user),
+        })
     else:
         status_dict['show_survey_button'] = False
 
     if status == 'downloadable':
+        linkedin_config = LinkedInAddToProfileConfiguration.current()
+        share_settings = configuration_helpers.get_value("SOCIAL_SHARING_SETTINGS", settings.SOCIAL_SHARING_SETTINGS)
+        linkedin_share_enabled = share_settings.get('CERTIFICATE_LINKEDIN', linkedin_config.enabled)
+        # Cert url will try and return the web view if possible, otherwise it will fall back to the download url.
+        cert_url = get_certificate_url(user_id=user.id, course_id=course_overview.id, uuid=cert_status['uuid'])
         # showing the certificate web view button if certificate is downloadable state and feature flags are enabled.
         if has_html_certificates_enabled(course_overview):
             if course_overview.has_any_active_web_certificate:
-                status_dict.update({
-                    'show_cert_web_view': True,
-                    'cert_web_view_url': get_certificate_url(course_id=course_overview.id, uuid=cert_status['uuid'])
-                })
+                status_dict.update({'show_cert_web_view': True, 'cert_web_view_url': cert_url})
             elif cert_status['download_url']:
-                status_dict['download_url'] = cert_status['download_url']
+                status_dict['download_url'] = cert_url
             else:
                 # don't show download certificate button if we don't have an active certificate for course
                 status_dict['status'] = 'unavailable'
+                linkedin_share_enabled = False
         elif 'download_url' not in cert_status:
             log.warning(
                 u"User %s has a downloadable cert for %s, but no download url",
-                user.username,
-                course_overview.id
+                user.username, course_overview.id
             )
             return default_info
         else:
-            status_dict['download_url'] = cert_status['download_url']
+            status_dict['download_url'] = cert_url
 
-            # If enabled, show the LinkedIn "add to profile" button
-            # Clicking this button sends the user to LinkedIn where they
-            # can add the certificate information to their profile.
-            linkedin_config = LinkedInAddToProfileConfiguration.current()
-
-            # posting certificates to LinkedIn is not currently
-            # supported in White Labels
-            if linkedin_config.enabled and not theming_helpers.is_request_in_themed_site():
-                status_dict['linked_in_url'] = linkedin_config.add_to_profile_url(
-                    course_overview.id,
-                    course_overview.display_name,
-                    cert_status.get('mode'),
-                    cert_status['download_url']
-                )
+        if linkedin_share_enabled:
+            status_dict['linked_in_url'] = linkedin_config.add_to_profile_url(
+                course_overview.display_name, cert_status.get('mode'), request.build_absolute_uri(cert_url),
+            )
 
     if status in {'generating', 'downloadable', 'notpassing', 'restricted', 'auditing', 'unverified'}:
         cert_grade_percent = -1
