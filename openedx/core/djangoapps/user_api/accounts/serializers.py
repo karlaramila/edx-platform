@@ -14,6 +14,7 @@ from django.urls import reverse
 from rest_framework import serializers
 from six import text_type
 
+from student.models import UserAccountDisableHistory
 from lms.djangoapps.badges.utils import badges_enabled
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api import errors
@@ -216,15 +217,33 @@ class UserReadOnlySerializer(serializers.Serializer):
         return visible_serialized_account
 
 
+class UserAccountDisableHistorySerializer(serializers.ModelSerializer):
+    """
+    Class that serializes User account disable history
+    """
+
+    class Meta(object):
+        model = UserAccountDisableHistory
+        fields = ("created", "comment", "disabled")
+
+
 class AccountUserSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFieldsSerializerMixin):
     """
     Class that serializes the portion of User model needed for account information.
     """
+    disable_history = serializers.SerializerMethodField()
+
     class Meta(object):
         model = User
-        fields = ("username", "email", "date_joined", "is_active")
-        read_only_fields = ("username", "email", "date_joined", "is_active")
+        fields = ("username", "email", "date_joined", "is_active", "disable_history")
+        read_only_fields = ("username", "email", "date_joined", "is_active", "disable_history")
         explicit_read_only_fields = ()
+
+    def get_disable_history(self, user):
+        disable_history = UserAccountDisableHistory.objects.filter(
+            user=user
+        )
+        return UserAccountDisableHistorySerializer(disable_history, many=True).data
 
 
 class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFieldsSerializerMixin):

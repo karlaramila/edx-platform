@@ -3103,3 +3103,12 @@ class CourseEnrollmentCelebration(TimeStampedModel):
             return enrollment.celebration.celebrate_first_section
         except CourseEnrollmentCelebration.DoesNotExist:
             return False
+
+
+class UserAccountDisableHistory(TimeStampedModel):
+    user = models.ForeignKey(User, related_name='disable_comment', on_delete=models.CASCADE)
+    comment = models.CharField(max_length=255, help_text=_("Add a reason"))
+    disabled = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.comment
