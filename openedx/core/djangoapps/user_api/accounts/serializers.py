@@ -240,6 +240,7 @@ class AccountUserSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFiel
         explicit_read_only_fields = ()
 
     def get_disable_history(self, user):
+        """ Return a list of the user's disable history """
         disable_history = UserAccountDisableHistory.objects.filter(
             user=user
         )
