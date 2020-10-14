@@ -69,7 +69,7 @@ class ManageUserDetailView(GenericAPIView):
         )
         comment = request.data.get("comment")
         disable_history = UserAccountDisableHistory.objects.create(
-            user=user, comment=comment
+            user=user, comment=comment, by=request.user
         )
         if user.has_usable_password():
             user.set_unusable_password()

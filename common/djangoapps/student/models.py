@@ -3110,8 +3110,9 @@ class UserAccountDisableHistory(TimeStampedModel):
     Keeps track of user disable/enable history
     """
     user = models.ForeignKey(User, related_name='disable_comment', on_delete=models.CASCADE)
-    comment = models.CharField(max_length=255, help_text=_("Add a reason"))
+    comment = models.CharField(max_length=255, help_text=_("Add a reason"), blank=True, null=True)
     disabled = models.BooleanField(default=True)
+    by = models.ForeignKey(User, related_name='users_disabled', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.comment

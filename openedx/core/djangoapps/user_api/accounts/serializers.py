@@ -222,9 +222,14 @@ class UserAccountDisableHistorySerializer(serializers.ModelSerializer):
     Class that serializes User account disable history
     """
 
+    disabled_by = serializers.SerializerMethodField()
+
     class Meta(object):
         model = UserAccountDisableHistory
-        fields = ("created", "comment", "disabled")
+        fields = ("created", "comment", "disabled", "disabled_by")
+
+    def get_disabled_by(self, disable_history):
+        return disable_history.by.username
 
 
 class AccountUserSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFieldsSerializerMixin):
@@ -243,7 +248,7 @@ class AccountUserSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFiel
         """ Return a list of the user's disable history """
         disable_history = UserAccountDisableHistory.objects.filter(
             user=user
-        )
+        ).order_by("-created")
         return UserAccountDisableHistorySerializer(disable_history, many=True).data
 
 
