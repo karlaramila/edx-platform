@@ -235,7 +235,7 @@ class AccountUserSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFiel
     """
     Class that serializes the portion of User model needed for account information.
     """
-    password_toggle_history = UserAccountDisableHistorySerializer(many=True)
+    password_toggle_history = UserAccountDisableHistorySerializer(many=True, required=False)
 
     class Meta(object):
         model = User
