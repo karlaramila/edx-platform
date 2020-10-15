@@ -3105,14 +3105,17 @@ class CourseEnrollmentCelebration(TimeStampedModel):
             return False
 
 
-class UserAccountDisableHistory(TimeStampedModel):
+class UserPasswordToggleHistory(TimeStampedModel):
     """
-    Keeps track of user disable/enable history
+    Keeps track of user password disable/enable history
     """
-    user = models.ForeignKey(User, related_name='disable_comment', on_delete=models.CASCADE)
+    user = models.ForeignKey(User, related_name='password_toggle_history', on_delete=models.CASCADE)
     comment = models.CharField(max_length=255, help_text=_("Add a reason"), blank=True, null=True)
     disabled = models.BooleanField(default=True)
-    by = models.ForeignKey(User, related_name='users_disabled', on_delete=models.CASCADE)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    class Meta:
+        ordering = ['-created']
 
     def __str__(self):
         return self.comment

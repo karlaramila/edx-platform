@@ -11,7 +11,7 @@ from django.utils.translation import ugettext as _
 from django.views.generic import View
 from rest_framework.generics import GenericAPIView
 
-from student.models import UserAccountDisableHistory
+from student.models import UserPasswordToggleHistory
 from edxmako.shortcuts import render_to_response
 from lms.djangoapps.support.decorators import require_support_permission
 from openedx.core.djangoapps.user_api.accounts.serializers import AccountUserSerializer
@@ -68,17 +68,17 @@ class ManageUserDetailView(GenericAPIView):
             Q(username=username_or_email) | Q(email=username_or_email)
         )
         comment = request.data.get("comment")
-        disable_history = UserAccountDisableHistory.objects.create(
-            user=user, comment=comment, by=request.user
-        )
         if user.has_usable_password():
             user.set_unusable_password()
-            disable_history.disabled = True
+            UserPasswordToggleHistory.objects.create(
+                user=user, comment=comment, created_by=request.user, disabled=True
+            )
         else:
             user.set_password(generate_password(length=25))
-            disable_history.disabled = False
+            UserPasswordToggleHistory.objects.create(
+                user=user, comment=comment, created_by=request.user, disabled=False
+            )
         user.save()
-        disable_history.save()
 
         if user.has_usable_password():
             password_status = _('Usable')

@@ -14,7 +14,7 @@ from django.urls import reverse
 from rest_framework import serializers
 from six import text_type
 
-from student.models import UserAccountDisableHistory
+from student.models import UserPasswordToggleHistory
 from lms.djangoapps.badges.utils import badges_enabled
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api import errors
@@ -221,35 +221,27 @@ class UserAccountDisableHistorySerializer(serializers.ModelSerializer):
     """
     Class that serializes User account disable history
     """
-
-    disabled_by = serializers.SerializerMethodField()
+    created_by = serializers.SerializerMethodField()
 
     class Meta(object):
-        model = UserAccountDisableHistory
-        fields = ("created", "comment", "disabled", "disabled_by")
+        model = UserPasswordToggleHistory
+        fields = ("created", "comment", "disabled", "created_by")
 
-    def get_disabled_by(self, disable_history):
-        return disable_history.by.username
+    def get_created_by(self, user_password_toggle_history):
+        return user_password_toggle_history.created_by.username
 
 
 class AccountUserSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFieldsSerializerMixin):
     """
     Class that serializes the portion of User model needed for account information.
     """
-    disable_history = serializers.SerializerMethodField()
+    password_toggle_history = UserAccountDisableHistorySerializer(many=True)
 
     class Meta(object):
         model = User
-        fields = ("username", "email", "date_joined", "is_active", "disable_history")
-        read_only_fields = ("username", "email", "date_joined", "is_active", "disable_history")
+        fields = ("username", "email", "date_joined", "is_active", "password_toggle_history")
+        read_only_fields = fields
         explicit_read_only_fields = ()
-
-    def get_disable_history(self, user):
-        """ Return a list of the user's disable history """
-        disable_history = UserAccountDisableHistory.objects.filter(
-            user=user
-        ).order_by("-created")
-        return UserAccountDisableHistorySerializer(disable_history, many=True).data
 
 
 class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, ReadOnlyFieldsSerializerMixin):
